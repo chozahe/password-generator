@@ -1,13 +1,24 @@
 import { PasswordManagerUI } from './ui/password-manager-ui.ts';
-import { generateSecurePassword } from './utils/password-generator.ts';
+import { generateSecurePassword, generatePassword } from './utils/password-generator.ts';
 import { EncryptedPasswordService } from './services/encrypted-password-service.ts';
-import type { PasswordEntry } from './types/index.ts';
+import type { PasswordEntry, PasswordOptions } from './types/index.ts';
 import clipboardy from 'clipboardy';
+
+const DEFAULT_GENERATOR_OPTIONS: PasswordOptions = {
+  length: 16,
+  includeUppercase: true,
+  includeLowercase: true,
+  includeNumbers: true,
+  includeSymbols: true,
+  customChars: '',
+  excludeChars: ''
+};
 
 export class PasswordManagerApp {
   private ui: PasswordManagerUI;
   private passwordService: EncryptedPasswordService;
   private isAuthenticated = false;
+  private generatorOptions: PasswordOptions = { ...DEFAULT_GENERATOR_OPTIONS };
 
   constructor(dataFilePath?: string) {
     this.passwordService = new EncryptedPasswordService(dataFilePath);
@@ -52,6 +63,9 @@ export class PasswordManagerApp {
         this.generatePassword();
         break;
       case 3:
+        await this.showGeneratorSettings();
+        break;
+      case 4:
         this.ui.exit();
         break;
     }
@@ -74,7 +88,7 @@ export class PasswordManagerApp {
       { name: 'service', label: 'Сервис (например: google.com)' },
       { name: 'username', label: 'Логин / Email' },
       { name: 'password', label: 'Пароль', password: true }
-    ], () => generateSecurePassword(16));
+    ], () => generatePassword(this.generatorOptions));
 
     if (!result) {
       this.ui.showMessage('{center}{yellow-fg}Добавление отменено{/yellow-fg}{/center}');
@@ -103,12 +117,22 @@ export class PasswordManagerApp {
   }
 
   private generatePassword(): void {
-    const password = generateSecurePassword(16);
+    const password = generatePassword(this.generatorOptions);
     clipboardy.writeSync(password);
     this.ui.showMessage(
       `{center}{green-fg}{bold}✓ Пароль сгенерирован{/bold}{/green-fg}{/center}\n\n` +
       `{center}{yellow-fg}${password}{/yellow-fg}{/center}\n\n` +
       `{center}{green-fg}📋 Скопирован в буфер обмена!{/green-fg}{/center}`
     );
+  }
+
+  private async showGeneratorSettings(): Promise<void> {
+    const newOptions = await this.ui.showPasswordGeneratorOptions(this.generatorOptions);
+    if (newOptions) {
+      this.generatorOptions = newOptions;
+      this.ui.showMessage('{center}{green-fg}{bold}✓ Настройки сохранены{/bold}{/green-fg}{/center}');
+    } else {
+      this.ui.showMessage('{center}{yellow-fg}Настройки не изменены{/yellow-fg}{/center}');
+    }
   }
 }

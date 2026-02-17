@@ -13,6 +13,8 @@ export interface PasswordOptions {
   includeLowercase?: boolean;
   includeNumbers?: boolean;
   includeSymbols?: boolean;
+  customChars?: string;
+  excludeChars?: string;
 }
 
 export interface FormField {

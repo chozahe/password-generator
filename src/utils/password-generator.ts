@@ -6,7 +6,9 @@ const DEFAULT_OPTIONS: Required<PasswordOptions> = {
   includeUppercase: true,
   includeLowercase: true,
   includeNumbers: true,
-  includeSymbols: true
+  includeSymbols: true,
+  customChars: '',
+  excludeChars: ''
 };
 
 const CHAR_SETS = {
@@ -25,14 +27,24 @@ function getSecureRandomInt(max: number): number {
   return value % max;
 }
 
+function removeChars(charSet: string, charsToRemove: string): string {
+  const removeSet = new Set(charsToRemove);
+  return charSet.split('').filter(c => !removeSet.has(c)).join('');
+}
+
 export function generatePassword(options: Partial<PasswordOptions> = {}): string {
   const config = { ...DEFAULT_OPTIONS, ...options };
   
   let chars = '';
-  if (config.includeUppercase) chars += CHAR_SETS.uppercase;
-  if (config.includeLowercase) chars += CHAR_SETS.lowercase;
-  if (config.includeNumbers) chars += CHAR_SETS.numbers;
-  if (config.includeSymbols) chars += CHAR_SETS.symbols;
+  if (config.includeUppercase) chars += removeChars(CHAR_SETS.uppercase, config.excludeChars);
+  if (config.includeLowercase) chars += removeChars(CHAR_SETS.lowercase, config.excludeChars);
+  if (config.includeNumbers) chars += removeChars(CHAR_SETS.numbers, config.excludeChars);
+  if (config.includeSymbols) chars += removeChars(CHAR_SETS.symbols, config.excludeChars);
+  
+  // Добавляем пользовательские символы
+  if (config.customChars) {
+    chars += config.customChars;
+  }
   
   if (chars.length === 0) {
     throw new Error('At least one character set must be selected');

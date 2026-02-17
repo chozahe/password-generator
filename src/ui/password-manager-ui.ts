@@ -12,7 +12,7 @@ import {
   createBox,
   createButton
 } from './components.ts';
-import type { PasswordEntry, FormField, FormResult } from '../types/index.ts';
+import type { PasswordEntry, FormField, FormResult, PasswordOptions } from '../types/index.ts';
 
 interface PasswordListItem {
   entry: PasswordEntry;
@@ -51,11 +51,12 @@ export class PasswordManagerUI {
       top: 7,
       left: 'center',
       width: 50,
-      height: 10,
+      height: 12,
       items: [
         'Посмотреть пароли',
         'Добавить пароль',
         'Сгенерировать пароль',
+        'Настройки генерации',
         'Выйти'
       ]
     });
@@ -182,6 +183,269 @@ export class PasswordManagerUI {
         this.screen.render();
         resolve(null);
       });
+    });
+  }
+
+  public async showPasswordGeneratorOptions(
+    currentOptions: PasswordOptions
+  ): Promise<PasswordOptions | null> {
+    this.clearForm();
+    this.menu.hide();
+    this.output.hide();
+    this.hint.hide();
+
+    const box = blessed.box({
+      parent: this.screen,
+      top: 'center',
+      left: 'center',
+      width: 70,
+      height: 32,
+      border: { type: 'line' },
+      label: ' ⚙️ Настройки генерации пароля ',
+      tags: true,
+      style: {
+        border: { fg: COLORS.primary },
+        label: { fg: COLORS.accentBright, bold: true } as any
+      }
+    });
+
+    // Длина пароля
+    blessed.text({
+      parent: box,
+      top: 2,
+      left: 3,
+      content: '{bold}Длина пароля:{/bold}',
+      style: { fg: COLORS.text },
+      tags: true
+    });
+
+    const lengthInput = blessed.textbox({
+      parent: box,
+      top: 3,
+      left: 3,
+      width: 64,
+      height: 3,
+      border: { type: 'line' },
+      style: {
+        border: { fg: COLORS.border },
+        focus: { border: { fg: COLORS.borderFocus } }
+      },
+      inputOnFocus: true,
+      value: String(currentOptions.length)
+    });
+
+    // Чекбоксы для наборов символов
+    const checkboxes: blessed.Widgets.CheckboxElement[] = [];
+    const options = [
+      { name: 'includeUppercase', label: 'Заглавные буквы (A-Z)', value: currentOptions.includeUppercase },
+      { name: 'includeLowercase', label: 'Строчные буквы (a-z)', value: currentOptions.includeLowercase },
+      { name: 'includeNumbers', label: 'Цифры (0-9)', value: currentOptions.includeNumbers },
+      { name: 'includeSymbols', label: 'Символы (!@#$%^&*)', value: currentOptions.includeSymbols }
+    ];
+
+    for (let i = 0; i < options.length; i++) {
+      const opt = options[i]!;
+      blessed.text({
+        parent: box,
+        top: 7 + i * 2,
+        left: 3,
+        content: opt.label,
+        style: { fg: COLORS.text }
+      });
+
+      const checkbox = blessed.checkbox({
+        parent: box,
+        top: 7 + i * 2,
+        left: 35,
+        checked: opt.value,
+        style: {
+          focus: { fg: COLORS.accent }
+        }
+      });
+      checkboxes.push(checkbox);
+    }
+
+    // Пользовательские символы
+    blessed.text({
+      parent: box,
+      top: 16,
+      left: 3,
+      content: '{bold}Добавить свои символы:{/bold}',
+      style: { fg: COLORS.text },
+      tags: true
+    });
+
+    const customCharsInput = blessed.textbox({
+      parent: box,
+      top: 17,
+      left: 3,
+      width: 64,
+      height: 3,
+      border: { type: 'line' },
+      style: {
+        border: { fg: COLORS.border },
+        focus: { border: { fg: COLORS.borderFocus } }
+      },
+      inputOnFocus: true,
+      value: currentOptions.customChars || ''
+    });
+
+    // Исключаемые символы
+    blessed.text({
+      parent: box,
+      top: 21,
+      left: 3,
+      content: '{bold}Исключить символы:{/bold}',
+      style: { fg: COLORS.text },
+      tags: true
+    });
+
+    const excludeCharsInput = blessed.textbox({
+      parent: box,
+      top: 22,
+      left: 3,
+      width: 64,
+      height: 3,
+      border: { type: 'line' },
+      style: {
+        border: { fg: COLORS.border },
+        focus: { border: { fg: COLORS.borderFocus } }
+      },
+      inputOnFocus: true,
+      value: currentOptions.excludeChars || ''
+    });
+
+    // Разделительная линия
+    blessed.line({
+      parent: box,
+      top: 15,
+      left: 2,
+      width: 66,
+      orientation: 'horizontal',
+      style: { fg: COLORS.textMuted }
+    });
+
+    const hintBox = blessed.box({
+      parent: box,
+      bottom: 0,
+      left: 'center',
+      width: 66,
+      height: 1,
+      content: `{${COLORS.textMuted}-fg}Tab — следующий элемент  |  Shift+Tab — предыдущий  |  Space — выбрать/снять  |  Enter — сохранить  |  Esc — отмена{/${COLORS.textMuted}-fg}`,
+      tags: true,
+      style: { fg: COLORS.textMuted }
+    });
+
+    const formElements: blessed.Widgets.BlessedElement[] = [
+      box, lengthInput, ...checkboxes, customCharsInput, excludeCharsInput,
+      hintBox
+    ];
+    this.activeFormElements.push(...formElements);
+    lengthInput.focus();
+    this.screen.render();
+
+    return new Promise((resolve) => {
+      let cleanupKeys = () => {};
+
+      const submit = () => {
+        const length = parseInt(lengthInput.getValue() || '16', 10);
+        const result: PasswordOptions = {
+          length: isNaN(length) || length < 1 ? 16 : length,
+          includeUppercase: checkboxes[0]?.checked ?? true,
+          includeLowercase: checkboxes[1]?.checked ?? true,
+          includeNumbers: checkboxes[2]?.checked ?? true,
+          includeSymbols: checkboxes[3]?.checked ?? true,
+          customChars: customCharsInput.getValue() || '',
+          excludeChars: excludeCharsInput.getValue() || ''
+        };
+        cleanupKeys();
+        this.clearForm();
+        this.menu.show();
+        this.output.show();
+        this.hint.show();
+        this.menu.focus();
+        this.screen.render();
+        resolve(result);
+      };
+
+      const cancel = () => {
+        cleanupKeys();
+        this.clearForm();
+        this.menu.show();
+        this.output.show();
+        this.hint.show();
+        this.menu.focus();
+        this.screen.render();
+        resolve(null);
+      };
+
+      const focusableElements = [lengthInput, ...checkboxes, customCharsInput, excludeCharsInput];
+      let currentFocus = 0;
+
+      const focusNext = () => {
+        currentFocus = (currentFocus + 1) % focusableElements.length;
+        focusableElements[currentFocus]?.focus();
+        this.screen.render();
+      };
+
+      const focusPrev = () => {
+        currentFocus = (currentFocus - 1 + focusableElements.length) % focusableElements.length;
+        focusableElements[currentFocus]?.focus();
+        this.screen.render();
+      };
+
+      lengthInput.on('submit', focusNext);
+      customCharsInput.on('submit', focusNext);
+      excludeCharsInput.on('submit', submit);
+
+      const handleFocusNext = () => {
+        focusNext();
+        return false;
+      };
+      const handleFocusPrev = () => {
+        focusPrev();
+        return false;
+      };
+      const handleEnter = () => {
+        const focused = this.screen.focused;
+        if (
+          focused === lengthInput ||
+          focused === customCharsInput ||
+          focused === excludeCharsInput
+        ) {
+          return false;
+        }
+        submit();
+        return false;
+      };
+      const handleEscape = () => {
+        cancel();
+        return false;
+      };
+
+      this.screen.key(['tab'], handleFocusNext);
+      this.screen.key(['S-tab'], handleFocusPrev);
+      this.screen.key(['down', 'right'], handleFocusNext);
+      this.screen.key(['up', 'left'], handleFocusPrev);
+      this.screen.key(['enter'], handleEnter);
+      this.screen.key(['escape'], handleEscape);
+
+      cleanupKeys = () => {
+        const bindings: Array<{ keys: string[]; handler: () => boolean | void }> = [
+          { keys: ['tab'], handler: handleFocusNext },
+          { keys: ['S-tab'], handler: handleFocusPrev },
+          { keys: ['down', 'right'], handler: handleFocusNext },
+          { keys: ['up', 'left'], handler: handleFocusPrev },
+          { keys: ['enter'], handler: handleEnter },
+          { keys: ['escape'], handler: handleEscape }
+        ];
+
+        for (const binding of bindings) {
+          for (const key of binding.keys) {
+            this.screen.unkey(key, binding.handler);
+          }
+        }
+      };
     });
   }
 
